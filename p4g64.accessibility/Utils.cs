@@ -1,10 +1,12 @@
-﻿using p4g64.accessibility.Configuration;
+﻿using System.Diagnostics;
+using System.Drawing;
+using System.Text;
+using p4g64.accessibility.Configuration;
 using Reloaded.Memory.SigScan.ReloadedII.Interfaces;
 using Reloaded.Mod.Interfaces;
-using System.Diagnostics;
-using System.Text;
 
 namespace p4g64.accessibility;
+
 internal class Utils
 {
     private static ILogger _logger;
@@ -27,7 +29,6 @@ internal class Utils
         }
 
         return true;
-
     }
 
     internal static void LogDebug(string message)
@@ -43,12 +44,12 @@ internal class Utils
 
     internal static void LogError(string message, Exception e)
     {
-        _logger.WriteLine($"[Accessibility+] {message}: {e.Message}", System.Drawing.Color.Red);
+        _logger.WriteLine($"[Accessibility+] {message}: {e.Message}", Color.Red);
     }
 
     internal static void LogError(string message)
     {
-        _logger.WriteLine($"[Accessibility+] {message}", System.Drawing.Color.Red);
+        _logger.WriteLine($"[Accessibility+] {message}", Color.Red);
     }
 
     internal static void SigScan(string pattern, string name, Action<nint> action)
@@ -60,6 +61,7 @@ internal class Utils
                 LogError($"Unable to find {name}, stuff won't work :(");
                 return;
             }
+
             LogDebug($"Found {name} at 0x{result.Offset + BaseAddress:X}");
 
             action(result.Offset + BaseAddress);
@@ -82,13 +84,14 @@ internal class Utils
         {
             sb.Append(PushXmm(i));
         }
+
         return sb.ToString();
     }
 
     // Pops the value of an xmm register to the stack, restoring it after being saved with PushXmm
     public static string PopXmm(int xmmNum)
     {
-        return                 //Pop back the value from stack to xmm
+        return //Pop back the value from stack to xmm
             $"movdqu xmm{xmmNum}, dqword [rsp]\n" +
             $"add rsp, 16\n"; // re-align the stack
     }
@@ -101,6 +104,7 @@ internal class Utils
         {
             sb.Append(PopXmm(i));
         }
+
         return sb.ToString();
     }
 
@@ -112,5 +116,22 @@ internal class Utils
     internal static unsafe nuint GetGlobalAddress(nint ptrAddress)
     {
         return (nuint)((*(int*)ptrAddress) + ptrAddress + 4);
+    }
+
+    /// <summary>
+    /// Gets the length of a null terminated string
+    /// </summary>
+    /// <param name="stringPtr">The pointer to the string</param>
+    /// <param name="maxLength">The maximum possible length of the string</param>
+    /// <returns>The length of the string</returns>
+    public static unsafe int GetStringLength(byte* stringPtr, int maxLength)
+    {
+        for (int i = 0; i < maxLength; i++)
+        {
+            if (stringPtr[i] == 0)
+                return i;
+        }
+
+        return maxLength;
     }
 }

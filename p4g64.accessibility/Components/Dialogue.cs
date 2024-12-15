@@ -1,6 +1,6 @@
-﻿using System.Runtime.InteropServices;
-using System.Text;
+﻿using System.Text;
 using DavyKager;
+using p4g64.accessibility.Native.Text;
 using Reloaded.Hooks.Definitions;
 using static p4g64.accessibility.Native.Text.Text;
 using static p4g64.accessibility.Utils;
@@ -14,11 +14,11 @@ internal unsafe class Dialogue
 {
     private IHook<DrawDialogDelegate> _drawDialogHook;
 
-    private DialogExecutionInfo* _lastDialog = (DialogExecutionInfo*)0;
+    private Dialog.DialogExecutionInfo* _lastDialog = (Dialog.DialogExecutionInfo*)0;
     private int _lastPage = -1;
     private short _lastSelected = -1;
     private TextStruct* _lastSpeaker;
-    private DialogExecution* _playedDialog;
+    private Dialog.DialogExecution* _playedDialog;
     private IHook<StartDialogDelegate> _startDialogHook;
 
     internal Dialogue(IReloadedHooks hooks)
@@ -31,7 +31,7 @@ internal unsafe class Dialogue
 
         SigScan("48 89 5C 24 ?? 55 56 57 41 55 41 57 48 83 EC 40", "MsgWindow::StartDialog", address =>
         {
-            _playedDialog = (DialogExecution*)GetGlobalAddress(address + 0x28);
+            _playedDialog = (Dialog.DialogExecution*)GetGlobalAddress(address + 0x28);
             LogDebug($"Found PlayedDialog at 0x{(nuint)_playedDialog:X}");
             _startDialogHook = hooks.CreateHook<StartDialogDelegate>(StartDialog, address).Activate();
         });
@@ -43,30 +43,30 @@ internal unsafe class Dialogue
 
         // If we're starting the last dialog we looked at again clear it so the screen reader outputs again
         // (We could probably not check and just always clear when this is called, not 100% sure)
-        DialogExecutionInfo* dialog = _playedDialog[executionId].Info;
+        Dialog.DialogExecutionInfo* dialog = _playedDialog[executionId].Info;
         LogDebug($"Starting dialog 0x{(nuint)dialog:X}");
         if (dialog == _lastDialog)
         {
-            _lastDialog = (DialogExecutionInfo*)0;
+            _lastDialog = (Dialog.DialogExecutionInfo*)0;
         }
 
         return res;
     }
 
-    private uint DrawDialog(DialogExecutionInfo* dialogInfo)
+    private uint DrawDialog(Dialog.DialogExecutionInfo* dialogInfo)
     {
         var res = _drawDialogHook.OriginalFunction(dialogInfo);
 
-        if (dialogInfo->DialogText != (DialogExecutionInfo*)0)
+        if (dialogInfo->DialogText != (Dialog.DialogExecutionInfo*)0)
             SpeakMessage(dialogInfo);
 
-        if (dialogInfo->SelectionText != (DialogExecutionInfo*)0)
+        if (dialogInfo->SelectionText != (Dialog.DialogExecutionInfo*)0)
             SpeakSelection(dialogInfo);
 
         return res;
     }
 
-    private void SpeakMessage(DialogExecutionInfo* dialogInfo)
+    private void SpeakMessage(Dialog.DialogExecutionInfo* dialogInfo)
     {
         // Only speak out each bit of dialog once
         if (_lastDialog == dialogInfo &&
@@ -101,7 +101,7 @@ internal unsafe class Dialogue
         _lastSpeaker = speakerName;
     }
 
-    private void SpeakSelection(DialogExecutionInfo* dialogInfo)
+    private void SpeakSelection(Dialog.DialogExecutionInfo* dialogInfo)
     {
         // Only speak out the current selection once
         if (_lastDialog == dialogInfo && dialogInfo->SelectedOption == _lastSelected)
@@ -139,33 +139,7 @@ internal unsafe class Dialogue
     }
 
 
-    [StructLayout(LayoutKind.Explicit, Size = 0x40)]
-    internal struct DialogExecution
-    {
-        [FieldOffset(8)] internal DialogExecutionInfo* Info;
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    internal struct DialogExecutionInfo
-    {
-        [FieldOffset(0x20)] internal TextStruct* SpeakerNameText;
-
-        [FieldOffset(0x38)] internal TextStruct* DialogText;
-
-        [FieldOffset(0x70)] internal TextStruct* SelectionText;
-
-        [FieldOffset(0x7e)] internal short SelectedOption;
-
-        [FieldOffset(0x80)] internal short LastSelectedOption;
-
-        [FieldOffset(0x82)] internal short NumSelectionOptions;
-
-        [FieldOffset(0x48)] internal short CurrentPage;
-
-        [FieldOffset(0x4a)] internal short PageCount;
-    }
-
-    private delegate uint DrawDialogDelegate(DialogExecutionInfo* dialogInfo);
+    private delegate uint DrawDialogDelegate(Dialog.DialogExecutionInfo* dialogInfo);
 
     private delegate uint StartDialogDelegate(int executionId, int messageId);
 }
